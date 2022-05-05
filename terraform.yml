@@ -41,16 +41,18 @@ jobs:
         connect-host: http://localhost:8080
         connect-token: ${{ secrets.OP_CONNECT_TOKEN }}
     
-    # - name: Load Tailscale Secrets
-    #   uses: 1password/load-secrets-action@v1.0.1
-    #   env:
-    #     TAILSCALE_AUTHKEY: op://jtcressy-net-infra/tailscale/ephemeral/credential
+    - name: Load Tailscale Secrets
+      if: inputs.tailscale
+      uses: 1password/load-secrets-action@v1.0.1
+      env:
+        TAILSCALE_AUTHKEY: op://jtcressy-net-infra/tailscale/ephemeral/credential
 
-    # - name: Tailscale
-    #   uses: tailscale/github-action@effa99fe9dc68518c77d0e7c00879f6599714d39
-    #   with:
-    #     authkey: ${{ env.TAILSCALE_AUTHKEY }}
-    #     args: "--advertise-tags=tag:ghactions"
+    - name: Tailscale
+      if: inputs.tailscale
+      uses: tailscale/github-action@effa99fe9dc68518c77d0e7c00879f6599714d39
+      with:
+        authkey: ${{ env.TAILSCALE_AUTHKEY }}
+        args: "--advertise-tags=tag:ghactions"
 
     - name: Set up gcloud Cloud SDK environment
       uses: google-github-actions/setup-gcloud@v0.2.0
