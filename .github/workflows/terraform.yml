@@ -21,7 +21,9 @@ on:
       plan-has-changes:
         description: 'Whether the outcome of the terraform plan indicated pending changes'
         value: steps.action.outputs.planHasChanges
-
+      plan-output:
+        description: 'Logged plan output'
+        value: (contains(inputs.action, 'plan') && join([steps.action.outputs.stdout, steps.action.outputs.stderr], '\n'))
 
 permissions: write-all
 
