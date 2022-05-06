@@ -17,6 +17,11 @@ on:
         type: boolean
         default: false
         required: false
+    outputs:
+      plan-has-changes:
+        description: 'Whether the outcome of the terraform plan indicated pending changes'
+        value: steps.action.outputs.planHasChanges
+
 
 permissions: write-all
 
@@ -97,7 +102,16 @@ jobs:
 
     - name: Terraform Action
       id: action
-      run: terraform version && terraform ${{ inputs.action }} -no-color -input=false
+      run: |
+        terraform version
+        terraform ${{ inputs.action }} -no-color -input=false -detailed-exitcode
+        exitcode=$?
+        if [[ $exitcode -eq 2 ]]; then
+          echo '::set-output name=planHasChanges::true'
+          exit 0
+        else
+          exit $exitcode
+        fi
 
     - name: Update Pull Request
       id: update-pull-request
