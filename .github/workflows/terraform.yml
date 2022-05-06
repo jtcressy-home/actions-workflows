@@ -20,10 +20,10 @@ on:
     outputs:
       plan-has-changes:
         description: 'Whether the outcome of the terraform plan indicated pending changes'
-        value: steps.action.outputs.planHasChanges
+        value: ${{ steps.action.outputs.planHasChanges }}
       plan-output:
         description: 'Logged plan output'
-        value: (contains(inputs.action, 'plan') && join([steps.action.outputs.stdout, steps.action.outputs.stderr], '\n'))
+        value: ${{ (contains(inputs.action, 'plan') && join([steps.action.outputs.stdout, steps.action.outputs.stderr], '\n')) }}
 
 permissions: write-all
 
@@ -106,7 +106,7 @@ jobs:
       id: action
       run: |
         terraform version
-        terraform ${{ inputs.action }} -no-color -input=false -detailed-exitcode
+        terraform ${{ inputs.action }} -no-color -input=false ${{ (contains(inputs.action, 'plan') && '-detailed-exitcode') || '' }}
         exitcode=$?
         if [[ $exitcode -eq 2 ]]; then
           echo '::set-output name=planHasChanges::true'
