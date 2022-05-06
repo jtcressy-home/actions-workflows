@@ -7,6 +7,16 @@ on:
         type: boolean
         default: false
         required: false
+      action:
+        description: 'Terraform action to run: plan, apply or refresh'
+        type: string
+        default: plan
+        required: false
+      debug:
+        description: 'Enable extra debug jobs to print additional logs'
+        type: boolean
+        default: false
+        required: false
 
 permissions: write-all
 
@@ -85,15 +95,14 @@ jobs:
       id: validate
       run: terraform validate -no-color
 
-    - name: Terraform Plan
-      id: plan
-      run: terraform version && terraform plan -no-color -input=false
-      continue-on-error: true
+    - name: Terraform Action
+      id: action
+      run: terraform version && terraform ${{ inputs.action }} -no-color -input=false
 
     - name: Update Pull Request
       id: update-pull-request
       uses: actions-cool/maintain-one-comment@v2
-      if: always() && github.event_name == 'pull_request'
+      if: always() && inputs.action == 'plan' && github.event_name == 'pull_request'
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         body: |
@@ -104,13 +113,13 @@ jobs:
           ${{ steps.validate.outputs.stdout }}
           ${{ steps.validate.outputs.stderr }}
           ```
-          #### Terraform Plan 📖`${{ steps.plan.outcome }}`
+          #### Terraform Plan 📖`${{ steps.action.outcome }}`
           
           <details><summary>Show Plan</summary>
           
           ```
-          ${{ steps.plan.outputs.stdout }}
-          ${{ steps.plan.outputs.stderr }}
+          ${{ steps.action.outputs.stdout }}
+          ${{ steps.action.outputs.stderr }}
           ```
           
           </details>
@@ -119,17 +128,9 @@ jobs:
           <!-- created by terraform/update-pull-request -->
         emojis: ''
         body-include: '<!-- created by terraform/update-pull-request -->'
-    
-    - name: Terraform Plan Status
-      if: steps.plan.outcome == 'failure'
-      run: exit 1
-    
-    - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: terraform apply -auto-approve -input=false
 
     - name: Dump docker service logs
-      if: always()
+      if: always() && inputs.debug
       run: |
         docker ps -a
         echo "--- op-connect-sync ---"
