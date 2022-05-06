@@ -2,6 +2,11 @@ name: Terraform
 on:
   workflow_call:
     inputs:
+      path:
+        description: 'Workspace path to run terraform in (relative to repository root)'
+        type: string
+        default: '/'
+        required: false
       tailscale:
         description: 'Whether to connect the runner to the org tailnet'
         type: boolean
@@ -12,6 +17,11 @@ on:
         type: string
         default: plan
         required: false
+      arguments:
+        description: 'Extra arguments for terraform action step'
+        type: string
+        default: ''
+        required: false
       debug:
         description: 'Enable extra debug jobs to print additional logs'
         type: boolean
@@ -20,10 +30,10 @@ on:
     outputs:
       plan-has-changes:
         description: 'Whether the outcome of the terraform plan indicated pending changes'
-        value: ${{ steps.action.outputs.planHasChanges }}
+        value: ${{ jobs.terraform.outputs.plan-has-changes }}
       plan-output:
         description: 'Logged plan output'
-        value: ${{ (contains(inputs.action, 'plan') && join([steps.action.outputs.stdout, steps.action.outputs.stderr], '\n')) }}
+        value: ${{ jobs.terraform.outputs.plan-output }}
 
 permissions: write-all
 
@@ -31,6 +41,12 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     concurrency: terraform
+    outputs:
+      plan-has-changes: ${{ (steps.action.outputs.exitcode == '2') }}
+      plan-output: ${{ (contains(inputs.action, 'plan') && format('{0}{1}', steps.action.outputs.stdout, steps.action.outputs.stderr)) }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/${{ inputs.path }}
     services:
       op-connect-api:
         image: 1password/connect-api:latest
@@ -82,11 +98,12 @@ jobs:
       id: terraform-version
       uses: juliangruber/read-file-action@v1
       with:
-        path: .terraform-version
+        path: ${{ github.workspace }}/${{ inputs.path }}/.terraform-version
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v1
       with:
+        # terraform_wrapper: false
         terraform_version: ${{ steps.terraform-version.outputs.content }}
 
     - name: Terraform Format
@@ -105,15 +122,8 @@ jobs:
     - name: Terraform Action
       id: action
       run: |
-        terraform version
-        terraform ${{ inputs.action }} -no-color -input=false ${{ (contains(inputs.action, 'plan') && '-detailed-exitcode') || '' }}
-        exitcode=$?
-        if [[ $exitcode -eq 2 ]]; then
-          echo '::set-output name=planHasChanges::true'
-          exit 0
-        else
-          exit $exitcode
-        fi
+        terraform ${{ inputs.action }} -no-color -input=false ${{ (contains(inputs.action, 'plan') && '-detailed-exitcode') || '' }} ${{ inputs.arguments }}
+      continue-on-error: true
 
     - name: Update Pull Request
       id: update-pull-request
@@ -129,7 +139,7 @@ jobs:
           ${{ steps.validate.outputs.stdout }}
           ${{ steps.validate.outputs.stderr }}
           ```
-          #### Terraform Plan 📖`${{ steps.action.outcome }}`
+          #### Terraform Plan 📖`${{ (steps.action.outputs.exitcode == '2' && 'pending changes!') || steps.action.outcome }}`
           
           <details><summary>Show Plan</summary>
           
@@ -140,10 +150,20 @@ jobs:
           
           </details>
           
-          *Pusher: @${{ github.actor }}, Action: `${{ github.event_name }}`, Workflow: `${{ github.workflow }}`*
-          <!-- created by terraform/update-pull-request -->
+          *Pusher: @${{ github.actor }}, Action: `${{ github.event_name }}`, Workflow: `${{ github.workflow }}`, Context: `${{ inputs.path }}`*
+          <!-- created by terraform/${{ inputs.path }}/update-pull-request -->
         emojis: ''
-        body-include: '<!-- created by terraform/update-pull-request -->'
+        body-include: '<!-- created by terraform/${{ inputs.path }}/update-pull-request -->'
+    
+    - name: Terraform Action Status Check
+      if: steps.action.outputs.exitcode != '0' && steps.action.outputs.exitcode != '2'
+      env:
+        PLAN_STDOUT: ${{ steps.action.outputs.stdout }}
+        PLAN_STDERR: ${{ steps.action.outputs.stderr }}
+      run: |
+        echo $PLAN_STDOUT
+        echo $PLAN_STDERR
+        exit ${{ steps.action.outputs.exitcode }}
 
     - name: Dump docker service logs
       if: always() && inputs.debug
