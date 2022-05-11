@@ -12,6 +12,11 @@ on:
         type: boolean
         default: false
         required: false
+      vault:
+        description: 'URL to the vault instance for automatic login'
+        type: string
+        default: ''
+        required: false
       action:
         description: 'Terraform action to run: plan, apply or refresh'
         type: string
@@ -86,6 +91,17 @@ jobs:
       with:
         authkey: ${{ env.TAILSCALE_AUTHKEY }}
         args: "--advertise-tags=tag:ghactions"
+
+    - name: Vault Login
+      id: vault
+      if: inputs.vault != ''
+      uses: hashicorp/vault-action@v2.4.0
+      with:
+        url: ${{ inputs.vault }}
+        method: jwt
+        role: github-action
+        exportEnv: true
+        exportToken: true
 
     - name: Set up gcloud Cloud SDK environment
       uses: google-github-actions/setup-gcloud@v0.2.0
