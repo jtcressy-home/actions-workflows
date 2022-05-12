@@ -52,6 +52,8 @@ jobs:
     defaults:
       run:
         working-directory: ${{ github.workspace }}/${{ inputs.path }}
+    env:
+      VAULT_ADDR: ${{ inputs.vault }}
     services:
       op-connect-api:
         image: 1password/connect-api:latest
@@ -83,19 +85,18 @@ jobs:
       if: inputs.tailscale
       uses: 1password/load-secrets-action@v1.0.1
       env:
-        TAILSCALE_AUTHKEY: op://jtcressy-net-infra/tailscale/ephemeral/credential
+        TAILSCALE_AUTHKEY: op://jtcressy-net-infra/tailscale-key-ghactions/password
 
     - name: Tailscale
       if: inputs.tailscale
       uses: tailscale/github-action@effa99fe9dc68518c77d0e7c00879f6599714d39
       with:
         authkey: ${{ env.TAILSCALE_AUTHKEY }}
-        args: "--advertise-tags=tag:ghactions"
 
     - name: Vault Login
       id: vault
       if: inputs.vault != ''
-      uses: hashicorp/vault-action@v2.4.0
+      uses: hashicorp/vault-action@v2.4.1
       with:
         url: ${{ inputs.vault }}
         method: jwt
