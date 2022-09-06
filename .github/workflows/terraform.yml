@@ -89,7 +89,7 @@ jobs:
 
     - name: Tailscale
       if: inputs.tailscale
-      uses: tailscale/github-action@effa99fe9dc68518c77d0e7c00879f6599714d39
+      uses: tailscale/github-action@v1
       with:
         authkey: ${{ env.TAILSCALE_AUTHKEY }}
 
