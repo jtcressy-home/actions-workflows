@@ -96,7 +96,7 @@ jobs:
     - name: Vault Login
       id: vault
       if: inputs.vault != ''
-      uses: hashicorp/vault-action@v2
+      uses: hashicorp/vault-action@v2.4.2
       with:
         url: ${{ inputs.vault }}
         method: jwt
