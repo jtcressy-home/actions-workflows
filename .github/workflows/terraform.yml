@@ -188,7 +188,12 @@ jobs:
         echo $PLAN_STDOUT
         echo $PLAN_STDERR
         exit ${{ steps.action.outputs.exitcode }}
-
+        
+    - name: Tailscale
+      if: always() && inputs.tailscale
+      run: |
+        tailscale logout
+        
     - name: Dump docker service logs
       if: always() && inputs.debug
       run: |
