@@ -192,7 +192,7 @@ jobs:
     - name: Tailscale
       if: always() && inputs.tailscale
       run: |
-        tailscale logout
+        sudo tailscale logout
         
     - name: Dump docker service logs
       if: always() && inputs.debug
