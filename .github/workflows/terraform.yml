@@ -126,7 +126,7 @@ jobs:
         path: ${{ github.workspace }}/${{ inputs.path }}/.terraform-version
 
     - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v1
+      uses: hashicorp/setup-terraform@v2
       with:
         # terraform_wrapper: false
         terraform_version: ${{ steps.terraform-version.outputs.content }}
