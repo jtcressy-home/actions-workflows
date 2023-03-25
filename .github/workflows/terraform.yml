@@ -27,10 +27,25 @@ on:
         type: string
         default: ''
         required: false
+      init-arguments:
+        description: 'Extra arguments for terraform init step'
+        type: string
+        default: ''
+        required: false
       debug:
         description: 'Enable extra debug jobs to print additional logs'
         type: boolean
         default: false
+        required: false
+      environment:
+        description: 'Environment to use for deployment (optional)'
+        type: string
+        default: "terraform"
+        required: false
+      env-file:
+        description: "env file path for loading environment variables, e.g. production.env"
+        type: string
+        default: ""
         required: false
     outputs:
       plan-has-changes:
@@ -39,16 +54,29 @@ on:
       plan-output:
         description: 'Logged plan output'
         value: ${{ jobs.terraform.outputs.plan-output }}
+      outputs:
+        description: 'Terraform outputs encoded in json'
+        value: ${{ jobs.terraform.outputs.outputs }}
 
 permissions: write-all
+
+env:
+  TF_WORKSPACE: ${{ inputs.environment }}
+  TF_CLI_ARGS: "-no-color"
+  TF_CLI_ARGS_apply: "-auto-approve -input=false"
+  TF_CLI_ARGS_plan: "-detailed-exitcode -input=false -out=tfplan"
+  TF_CLI_ARGS_init: "-input=false -backend-config=bucket=${{ vars.GCP_PROJECT_ID }}-tf-state -backend-config=prefix=github/${{ github.repository }} ${{ inputs.init-arguments }}"
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    concurrency: terraform
+    environment:
+      name: ${{ inputs.environment }}
+    concurrency: ${{ inputs.environment }}/terraform/${{ inputs.path }}
     outputs:
       plan-has-changes: ${{ (steps.action.outputs.exitcode == '2') }}
       plan-output: ${{ (contains(inputs.action, 'plan') && format('{0}{1}', steps.action.outputs.stdout, steps.action.outputs.stderr)) }}
+      outputs: ${{ (contains(inputs.action, 'output') && steps.action.outputs.stdout || steps.outputs.outputs.stdout) }}
     defaults:
       run:
         working-directory: ${{ github.workspace }}/${{ inputs.path }}
@@ -74,6 +102,11 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
+
+    - name: Load ENV File
+      if: github.events.inputs.env-file != ''
+      run: |
+        cat ${{ github.workspace }}/${{ github.events.inputs.env-file }} >> $GITHUB_ENV
 
     - name: Configure 1Password Connect
       uses: 1password/load-secrets-action/configure@v1
@@ -121,6 +154,16 @@ jobs:
         project_id: ${{ vars.GCP_PROJECT_ID }}
         create_credentials_file: true
         export_environment_variables: true
+        
+    - name: Ensure TF State Bucket (${{ vars.GCP_PROJECT_ID }}-tf-state)
+      id: state_bucket
+      env:
+        TF_STATE_BUCKET: ${{ vars.GCP_PROJECT_ID }}-tf-state
+      run: |
+        gcloud storage buckets describe gs://$TF_STATE_BUCKET || \
+        gcloud storage buckets create gs://$TF_STATE_BUCKET
+        bucket_json=$(gcloud storage buckets describe gs://$TF_STATE_BUCKET --format=json | jq -c)
+        echo "bucket_json=$bucket_json" >> $GITHUB_OUTPUT
 
     - name: Query .terraform-version
       id: terraform-version
@@ -150,32 +193,55 @@ jobs:
     - name: Terraform Action
       id: action
       run: |
-        terraform ${{ inputs.action }} -no-color -input=false ${{ (contains(inputs.action, 'plan') && '-detailed-exitcode') || '' }} ${{ inputs.arguments }}
+        terraform ${{ inputs.action }}
       continue-on-error: true
+      env:
+        TF_CLI_ARGS: "${{ env.TF_CLI_ARGS }} ${{ inputs.arguments }}"
+
+    - name: Capture Outputs
+      id: outputs
+      run: |
+        terraform output -json
+
+    - name: Show Plan Output
+      id: planout
+      if: inputs.action == 'plan'
+      run: |
+        terraform show -no-color tfplan
+
+    - name: Format Plan Output
+      if: inputs.action == 'plan'
+      run: |
+        echo "PLAN<<EOF" >> $GITHUB_ENV
+        echo '${{ steps.planout.outputs.stdout || steps.planout.outputs.stderr }}' | sed -E 's/^([[:space:]]+)([-+])/\2\1/g' >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
 
     - name: Update Pull Request
       id: update-pull-request
-      uses: actions-cool/maintain-one-comment@v3
+      uses: actions-cool/maintain-one-comment@v2
       if: always() && inputs.action == 'plan' && github.event_name == 'pull_request'
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         body: |
-          #### Terraform Format and Style 🖌`${{ steps.fmt.outcome }}`
-          #### Terraform Initialization ⚙️`${{ steps.init.outcome }}`
-          #### Terraform Validation 🤖`${{ steps.validate.outcome }}`
-          ```
-          ${{ steps.validate.outputs.stdout }}
+          <strong>Terraform Format and Style 🖌 <code>${{ steps.fmt.outcome }}</code></strong>
+          <strong>Terraform Initialization ⚙️ <code>${{ steps.init.outcome }}</code></strong>
+          <details${{ (steps.validate.outcome != 'success' && ' open' || '') }}>
+          <summary><strong>Terraform Validation 🤖<code>${{ steps.validate.outcome }}</code></strong></summary>
+          <pre><code>${{ steps.validate.outputs.stdout }}
           ${{ steps.validate.outputs.stderr }}
+          </code></pre>
+          </details>
+          <details${{ (steps.action.outcome != 'success' && ' open' || '') }}>
+          <summary><strong>Terraform Plan 📖<code>${{ (steps.action.outputs.exitcode == '2' && 'pending changes!') || steps.action.outcome }}</code></strong></summary>
+
+          ```diff
+          ${{ env.PLAN }}
           ```
-          #### Terraform Plan 📖`${{ (steps.action.outputs.exitcode == '2' && 'pending changes!') || steps.action.outcome }}`
-          
-          <details><summary>Show Plan</summary>
-          
-          ```
-          ${{ steps.action.outputs.stdout }}
+
+          <details><summary>Show Plan STDOUT</summary><pre><code>${{ steps.action.outputs.stdout }}
           ${{ steps.action.outputs.stderr }}
-          ```
-          
+          </code></pre>
+          </details>
           </details>
           
           *Pusher: @${{ github.actor }}, Action: `${{ github.event_name }}`, Workflow: `${{ github.workflow }}`, Context: `${{ inputs.path }}`*
