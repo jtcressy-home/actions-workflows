@@ -105,7 +105,7 @@ jobs:
 
     - name: Tailscale
       if: inputs.tailscale
-      uses: tailscale/github-action@main
+      uses: tailscale/github-action@v1
       with:
         authkey: ${{ steps.tailscale-secrets.outputs.TAILSCALE_AUTHKEY }}
         
