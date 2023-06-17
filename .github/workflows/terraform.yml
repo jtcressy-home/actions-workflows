@@ -82,41 +82,24 @@ jobs:
         working-directory: ${{ github.workspace }}/${{ inputs.path }}
     env:
       VAULT_ADDR: ${{ inputs.vault }}
-    services:
-      op-connect-api:
-        image: 1password/connect-api:latest
-        ports:
-          - 8080:8080
-        volumes:
-          - op-data:/home/opuser/.op/data
-        env:
-          OP_SESSION: ${{ secrets.OP_CREDENTIALS_B64 }}
-      op-connect-sync:
-        image: 1password/connect-sync:latest
-        ports:
-          - 8081:8080
-        volumes:
-          - op-data:/home/opuser/.op/data
-        env:
-          OP_SESSION: ${{ secrets.OP_CREDENTIALS_B64 }}
     steps:
     - name: Checkout
       uses: actions/checkout@v3
 
     - name: Load ENV File
-      if: github.events.inputs.env-file != ''
+      if: inputs.env-file != ''
       run: |
-        cat ${{ github.workspace }}/${{ github.events.inputs.env-file }} >> $GITHUB_ENV
+        cat ${{ github.workspace }}/${{ inputs.env-file }} >> $GITHUB_ENV
 
-    - name: Configure 1Password Connect
+    - name: Setup 1Password
       uses: 1password/load-secrets-action/configure@v1
       with:
-        connect-host: http://localhost:8080
-        connect-token: ${{ secrets.OP_CONNECT_TOKEN }}
+        service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
     
     - name: Load Tailscale Secrets
+      id: tailscale-secrets
       if: inputs.tailscale
-      uses: 1password/load-secrets-action@v1.2.0
+      uses: 1password/load-secrets-action@v1
       env:
         TAILSCALE_AUTHKEY: op://jtcressy-net-infra/tailscale-key-ghactions/password
 
@@ -124,7 +107,7 @@ jobs:
       if: inputs.tailscale
       uses: tailscale/github-action@main
       with:
-        authkey: ${{ env.TAILSCALE_AUTHKEY }}
+        authkey: ${{ steps.tailscale-secrets.outputs.TAILSCALE_AUTHKEY }}
         
     - name: Decode Job OIDC Token (Debug)
       if: always() && (inputs.debug || contains(env.ACTIONS_STEP_DEBUG, 'true'))
