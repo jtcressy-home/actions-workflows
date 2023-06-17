@@ -108,7 +108,7 @@ jobs:
       uses: tailscale/github-action@main
       with:
         version: '1.42.0'
-        authkey: ${{ steps.tailscale-secrets.outputs.TAILSCALE_AUTHKEY }}
+        authkey: ${{ env.TAILSCALE_AUTHKEY }}
         
     - name: Decode Job OIDC Token (Debug)
       if: always() && (inputs.debug || contains(env.ACTIONS_STEP_DEBUG, 'true'))
