@@ -105,8 +105,9 @@ jobs:
 
     - name: Tailscale
       if: inputs.tailscale
-      uses: tailscale/github-action@v1
+      uses: tailscale/github-action@main
       with:
+        version: '1.42.0'
         authkey: ${{ steps.tailscale-secrets.outputs.TAILSCALE_AUTHKEY }}
         
     - name: Decode Job OIDC Token (Debug)
