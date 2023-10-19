@@ -84,7 +84,7 @@ jobs:
       VAULT_ADDR: ${{ inputs.vault }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Load ENV File
       if: inputs.env-file != ''
